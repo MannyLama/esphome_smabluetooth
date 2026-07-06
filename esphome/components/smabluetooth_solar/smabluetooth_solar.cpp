@@ -153,6 +153,19 @@ void SmaBluetoothSolar::loop() {
     }
 }
 
+// Called by ESPHome before a reboot (OTA, safe mode, restart switch).
+// The SMA BT module has a single connection slot; rebooting without a
+// SMANET2 logoff + RFCOMM disconnect leaves it occupied and the inverter
+// refuses reconnects for 10-20 min. stopBtTask() flags the protocol task,
+// whose teardown path logs off and disconnects, and waits (bounded, 3 s)
+// for it to finish.
+void SmaBluetoothSolar::on_shutdown() {
+    if (!hasSetup_ || smaInverter == nullptr) return;
+    ESP_LOGI(TAG, "Shutdown: logging off inverter and stopping BT task");
+    smaInverter->stopBtTask();
+    inverterState = SmaInverterState::Off;
+}
+
 // ============================================================
 //  Polling update — publishes sensor values to Home Assistant
 //  Called by ESPHome on the configured update_interval.

@@ -539,11 +539,26 @@ void ESP32_SMA_Inverter::btTask(void *pvParameters) {
             vTaskDelay(pdMS_TO_TICKS(500));
         }
 
-        // Disconnected or error — disconnect cleanly and retry
+        // Disconnected or error — log off and disconnect cleanly, then retry.
+        // The SMA BT module has a single connection slot: dropping the RFCOMM
+        // link without a SMANET2 logoff leaves the session occupied on the
+        // inverter side, and it refuses new connections (HCI page timeout,
+        // st 0x4) until its internal timeout expires — observed 10-20 min on
+        // SB x000TL-20. Logging off first frees the slot immediately.
         if (self->spp_handle_ != 0) {
+            if (self->btConnected_) {
+                self->logoffSMAInverter();
+                vTaskDelay(pdMS_TO_TICKS(100));  // let the logoff frame drain onto the link
+            }
             esp_spp_disconnect((uint32_t)self->spp_handle_);
+            // Wait (bounded) for SPP_CLOSE so the disconnect completes before
+            // a potential reboot kills the BT stack mid-teardown.
+            for (int i = 0; i < 10 && self->spp_handle_ != 0; i++) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
         }
         self->btConnected_ = false;
+        if (self->stop_task_) break;
         ESP_LOGI(TTAG, "Disconnected, retrying in 5 s");
         vTaskDelay(pdMS_TO_TICKS(5000));
     }

@@ -87,6 +87,7 @@ class SmaBluetoothSolar : public PollingComponent {
     void loop()   override;
     void setup()  override;
     void update() override;
+    void on_shutdown() override;
     void handleMissingValues();
     void dump_config() override;
 
