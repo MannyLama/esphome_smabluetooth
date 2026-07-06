@@ -27,6 +27,7 @@ SOFTWARE.
 #include "esphome/core/log.h"
 #include "esp_idf_version.h"
 #include "esp_mac.h"
+#include "esp_bt_device.h"
 #include <cmath>
 
 namespace esphome {
@@ -428,6 +429,13 @@ void ESP32_SMA_Inverter::btTask(void *pvParameters) {
         xEventGroupClearBits(self->bt_event_group_, BT_EVT_DISC_DONE | BT_EVT_CONNECTED | BT_EVT_DISCONNECTED);
         self->flushRxBuffer();
 
+        {
+            const uint8_t *own = esp_bt_dev_get_address();
+            if (own != nullptr) {
+                ESP_LOGI(TTAG, "Own BT MAC %02X:%02X:%02X:%02X:%02X:%02X",
+                         own[0], own[1], own[2], own[3], own[4], own[5]);
+            }
+        }
         ESP_LOGI(TTAG, "Starting SPP discovery");
         esp_err_t err = esp_spp_start_discovery(self->smaBTAddress);
         if (err != ESP_OK) {
