@@ -26,6 +26,7 @@ SOFTWARE.
 #include "SMA_Inverter.h"
 #include "esphome/core/log.h"
 #include "esp_idf_version.h"
+#include "esp_mac.h"
 #include <cmath>
 
 namespace esphome {
@@ -145,6 +146,24 @@ bool ESP32_SMA_Inverter::begin(const char *localName) {
     esp_err_t ret = esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
         ESP_LOGW(TAG, "mem_release BLE: %s", esp_err_to_name(ret));
+    }
+
+    // Use a locally-administered BT MAC derived from the factory address.
+    // Recovery for inverter-side stale pairing state: the SMA BT module can
+    // keep ignoring page requests from a previously known address (observed
+    // on an SB 5000TL-20 after an ungraceful disconnect: HCI page timeout
+    // st 0x4 for the old address while fresh identities connect fine).
+    // Must run before esp_bt_controller_init().
+    {
+        uint8_t mac[6];
+        if (esp_read_mac(mac, ESP_MAC_BT) == ESP_OK) {
+            mac[0] |= 0x02;      // locally administered bit
+            mac[5] ^= 0xA5;      // deterministic new identity
+            esp_err_t mret = esp_iface_mac_addr_set(mac, ESP_MAC_BT);
+            ESP_LOGW(TAG, "BT MAC override %02X:%02X:%02X:%02X:%02X:%02X (%s)",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+                     esp_err_to_name(mret));
+        }
     }
 
     // BT controller
