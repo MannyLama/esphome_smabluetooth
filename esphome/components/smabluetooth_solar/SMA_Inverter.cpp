@@ -186,6 +186,23 @@ bool ESP32_SMA_Inverter::begin(const char *localName) {
     esp_bt_gap_set_device_name(localName);
     esp_bt_gap_set_pin(ESP_BT_PIN_TYPE_FIXED, 4, (uint8_t *)btPin);
 
+    // Drop any stored BT bonds from previous sessions. A stale or poisoned
+    // link key can make the inverter ignore our page requests entirely
+    // (HCI page timeout, st 0x4) even while it stays inquiry-visible to
+    // other devices. The SMA module re-pairs with the fixed PIN on every
+    // fresh connect, so persisted bonds buy nothing and can wedge us.
+    int bond_count = esp_bt_gap_get_bond_device_num();
+    if (bond_count > 0) {
+        esp_bd_addr_t bonded[8];
+        int num = (bond_count > 8) ? 8 : bond_count;
+        if (esp_bt_gap_get_bond_device_list(&num, bonded) == ESP_OK) {
+            for (int i = 0; i < num; i++) {
+                esp_bt_gap_remove_bond_device(bonded[i]);
+            }
+            ESP_LOGW(TAG, "Removed %d stale BT bond(s)", num);
+        }
+    }
+
     // Make device non-discoverable / non-connectable (we initiate; don't want to be found)
     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
 
